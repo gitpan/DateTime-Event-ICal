@@ -11,7 +11,7 @@ use DateTime::Event::Recurrence;
 use Params::Validate qw(:all);
 use vars qw( $VERSION @ISA );
 @ISA     = qw( Exporter );
-$VERSION = '0.00_02';
+$VERSION = '0.01';
 
 use constant INFINITY     =>       100 ** 100 ** 100 ;
 use constant NEG_INFINITY => -1 * (100 ** 100 ** 100);
@@ -127,9 +127,15 @@ sub _weekly_recurrence {
             $by{minutes} = $dtstart->minute unless exists $by{minutes};
             $by{hours} =   $args{byhour} if exists $args{byhour};
             $by{hours} =   $dtstart->hour unless exists $by{hours};
-            # TODO: -1fr should work too?
+
+            $by{week_start_day} = $args{wkst} ?
+                                  $args{wkst} : 'mo';
+
+            # -1fr works too
             $by{days} = exists $args{byday} ?
-                        [ map { $weekdays{$_} } @{$args{byday}} ] :
+                        [ map { $_ =~ s/[\-\+\d]+//; $weekdays{$_} } 
+                              @{$args{byday}} 
+                        ] :
                         $dtstart->day_of_week ;
     # warn "weekly:"._param_str(%by);
 
@@ -144,12 +150,15 @@ sub _monthly_recurrence {
     my %args = %$argsref;
             $by{interval} = $args{interval} if exists $args{interval};
             $by{start} =    $dtstart;
-            $by{seconds} = $args{bysecond} if exists $args{bysecond};
-            $by{seconds} = $dtstart->second unless exists $by{seconds};
-            $by{minutes} = $args{byminute} if exists $args{byminute};
-            $by{minutes} = $dtstart->minute unless exists $by{minutes};
-            $by{hours} =   $args{byhour} if exists $args{byhour};
-            $by{hours} =   $dtstart->hour unless exists $by{hours};
+            $by{seconds} =  $args{bysecond} if exists $args{bysecond};
+            $by{seconds} =  $dtstart->second unless exists $by{seconds};
+            $by{minutes} =  $args{byminute} if exists $args{byminute};
+            $by{minutes} =  $dtstart->minute unless exists $by{minutes};
+            $by{hours} =    $args{byhour} if exists $args{byhour};
+            $by{hours} =    $dtstart->hour unless exists $by{hours};
+
+            $by{week_start_day} = $args{wkst} ?
+                                  $args{wkst} : '1mo';
 
             if ( exists $args{bymonthday} )
             {
@@ -204,6 +213,10 @@ sub _yearly_recurrence {
             $by{hours} =   $args{byhour} if exists $args{byhour};
             $by{hours} =   $dtstart->hour unless exists $by{hours};
 
+            $by{week_start_day} = $args{wkst} ?
+                                  $args{wkst} : 'mo';
+            # warn "wkst $by{week_start_day}";
+
             if ( exists $args{bymonth} )
             {
                 $by{months} =  $args{bymonth};
@@ -221,9 +234,9 @@ sub _yearly_recurrence {
                 $by{weeks} =  $args{byweekno};
                 delete $$argsref{byweekno};
 
-                $by{days} =    $args{byweekday} if exists $args{byweekday};
+                $by{days} =    $args{byday} if exists $args{byday};
                 $by{days} =    $dtstart->day_of_week unless exists $by{days};
-                delete $$argsref{byweekday};
+                delete $$argsref{byday};
             }
             elsif ( exists $args{byyearday} )
             {
@@ -231,8 +244,12 @@ sub _yearly_recurrence {
                 delete $$argsref{byyearday};
             }
             elsif ( exists $args{byday} )
-            {   # "1FR"
+            {  
+                # process byday = "1FR" and "FR"
+
                 $by{byday} =    $args{byday};
+                # don't use 'FR'-style here
+
                 delete $$argsref{$_} 
                     for qw( interval bysecond byminute byhour byday );
                 return _recur_1fr( %by, freq => 'yearly' );
@@ -253,6 +270,7 @@ sub _yearly_recurrence {
 
 sub _recur_1fr {
     # ( freq , interval, dtstart, byday[ week_count . week_day ] )
+    # TODO: accept simple 'FR' specification
     my %args = @_;
     my $base_set;
     my %days;
@@ -276,7 +294,7 @@ sub _recur_1fr {
         my %_args = %args;
         $_args{weeks} = $days{$_};
         $_args{week_start_day} = '1'.$_;
-        # warn "creating base set with $_ "._param_str( %_args );
+        # warn "creating set with $_ "._param_str( %_args );
 
         if ( $_args{freq} eq 'monthly' ) {
             $base_duration = 'months';
@@ -317,33 +335,94 @@ sub _recur_bysetpos {
     #    $DateTime::Event::Recurrence::next_unit{ $names };
     #my $previous_unit_sub =
     #    $DateTime::Event::Recurrence::previous_unit{ $names };
+
+    $args{bysetpos} = [ $args{bysetpos} ]
+        unless ref( $args{bysetpos} );
+    # die "invalid bysetpos parameter [@{$args{bysetpos}}]" 
+    #     unless @{$args{bysetpos}};
     # print STDERR "bysetpos:  [@{$args{bysetpos}}]\n";
     for ( @{$args{bysetpos}} ) { $_-- if $_ > 0 }
     return DateTime::Set->from_recurrence (
         next =>
         sub {
+            return undef unless defined $_[0];
             my $self = $_[0]->clone;
-            # warn "bysetopos: next of ".$_[0]->datetime;
+            # warn "bysetpos: next of ".$_[0]->datetime;
+            # print STDERR "    list [@{$args{bysetpos}}] \n";
             # print STDERR "    previous: ".$base_set->current( $_[0] )->datetime."\n";
             my $start = $base_set->current( $_[0] );
-          while(1) {
+            while(1) {
+                my $end   = $base_set->next( $start->clone );
+                if ( $#{$args{bysetpos}} == 0 ) {
+                    # optimize by using 'next' instead of 'intersection'
+
+                    my $pos = $args{bysetpos}[0];
+                    if ( $pos >= 0 ) {
+                        my $next = $start->clone;
+                        $next->subtract( nanoseconds => 1 );
+                        while ( $pos-- >= 0 ) { 
+                            # print STDERR "    next: $pos ".$next->datetime."\n";
+                            $next = $args{recurrence}->next( $next ) 
+                        }
+                        return $next if $next > $self;
+                    }
+                    else {
+                        my $next = $end->clone;
+                        while ( $pos++ < 0 ) { 
+                            # print STDERR "    previous: $pos ".$next->datetime."\n";
+                            $next = $args{recurrence}->previous( $next ) 
+                        }
+                        return $next if $next > $self;
+                    }
+
+                }
+                else {
+                    # print STDERR "    base: ".$start->datetime." ".$end->datetime."\n";
+                    my $span = DateTime::Span->from_datetimes( 
+                              start => $start,
+                              before => $end );
+                    # print STDERR "    done span\n";
+                    my $subset = $args{recurrence}->intersection( $span );
+                    my @list = $subset->as_list;
+                    # print STDERR "    got list ".join(",", map{$_->datetime}@list)."\n";
+                    # select
+                    @list = sort { $a <=> $b } @list[ @{$args{bysetpos}} ];
+                    # print STDERR "    selected [@{$args{bysetpos}}]".join(",", map{$_->datetime}@list)."\n";
+                    for ( @list ) {
+                        # print STDERR "    choose: ".$_->datetime."\n" if $_ > $self;
+                        return $_ if $_ > $self;
+                    }
+                }
+                $start = $end;
+            }  # /while
+        },
+        previous =>
+        sub {
+            my $self = $_[0]->clone;
+            # warn "bysetpos: previous of ".$_[0]->datetime;
+            # print STDERR "    previous: ".$base_set->current( $_[0] )->datetime."\n";
+            my $start = $base_set->current( $_[0] );
             my $end   = $base_set->next( $start->clone );
-            # print STDERR "    base: ".$start->datetime." ".$end->datetime."\n";
-            my $span = DateTime::Span->from_datetimes( 
+            my $count = 10;
+            while(1) {
+                # print STDERR "    base: ".$start->datetime." ".$end->datetime."\n";
+                my $span = DateTime::Span->from_datetimes(
                           start => $start,
                           before => $end );
-            # print STDERR "    done span\n";
-            my $subset = $args{recurrence}->intersection( $span );
-            my @list = $subset->as_list;
-            # print STDERR "    got list ".join(",", map{$_->datetime}@list)."\n";
-            # select
-            @list = sort @list[ @{$args{bysetpos}} ];
-            # print STDERR "    selected [@{$args{bysetpos}}]".join(",", map{$_->datetime}@list)."\n";
-            for ( @list ) {
-                return $_ if $_ > $self;
-            }
-            $start = $end;
-          }  # /while
+                # print STDERR "    done span\n";
+                my $subset = $args{recurrence}->intersection( $span );
+                my @list = $subset->as_list;
+                # print STDERR "    got list ".join(",", map{$_->datetime}@list)."\n";
+                # select
+                @list = sort { $b <=> $a } @list[ @{$args{bysetpos}} ];
+                # print STDERR "    selected [@{$args{bysetpos}}]".join(",", map{$_->datetime}@list)."\n";
+                for ( @list ) {
+                    return $_ if $_ < $self;
+                }
+                return undef unless $count--;
+                $end = $start;
+                $start = $base_set->previous( $start );
+            }  # /while
         }
     );
 }
@@ -353,6 +432,7 @@ sub _recur_bysetpos {
 sub recur {
     my $class = shift;
     my %args = @_;
+    my %args_backup = @_;
 
     if ( exists $args{count} )
     {
@@ -454,6 +534,18 @@ sub recur {
         $by_week_day = _weekly_recurrence($dtstart, \%args);
     }
 
+    my $by_hour;
+    if ( exists $args{byhour} ) 
+    {
+        my %by = %args;
+        $by{byminute} = $args_backup{byminute} if $args_backup{byminute};
+        $by{byminute} = [ 0 .. 59 ] if $args{freq} eq 'minutely';
+        $by{bysecond} = $args_backup{bysecond} if $args_backup{bysecond};
+        $by{bysecond} = [ 0 .. 59 ] if $args{freq} eq 'secondly';
+        $by_hour = _daily_recurrence($dtstart, \%by);
+        delete $args{byhour};
+    }
+
     # join the rules together
 
     $base_set = $base_set && $by_year_day ?
@@ -465,8 +557,9 @@ sub recur {
     $base_set = $base_set && $by_week_day ?
                 $base_set->intersection( $by_week_day ) :
                 ( $base_set ? $base_set : $by_week_day );
-    $base_set = $base_set->intersection( $span )
-                if $span;
+    $base_set = $base_set && $by_hour ?
+                $base_set->intersection( $by_hour ) :
+                ( $base_set ? $base_set : $by_hour );
 
     # TODO:
     # wkst
@@ -480,6 +573,9 @@ sub recur {
             recurrence => $base_set );
         delete $args{bysetpos};
     }
+
+    $base_set = $base_set->intersection( $span )
+                if $span;
 
     # check for nonprocessed arguments
     delete $args{freq};
