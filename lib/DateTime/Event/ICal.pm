@@ -11,7 +11,7 @@ use DateTime::Event::Recurrence 0.06;
 use Params::Validate qw(:all);
 use vars qw( $VERSION @ISA );
 @ISA     = qw( Exporter );
-$VERSION = 0.06;
+$VERSION = 0.07;
 
 use constant INFINITY     =>       100 ** 100 ** 100 ;
 use constant NEG_INFINITY => -1 * (100 ** 100 ** 100);
@@ -388,7 +388,10 @@ sub _recur_bysetpos {
     return DateTime::Set->from_recurrence (
         next =>
         sub {
-            return undef unless defined $_[0];
+
+            return $_[0] if $_[0]->is_infinite;
+
+            ## return undef unless defined $_[0];
             my $self = $_[0]->clone;
             # warn "bysetpos: next of ".$_[0]->datetime;
             # print STDERR "    list [@{$args{bysetpos}}] \n";
@@ -441,6 +444,9 @@ sub _recur_bysetpos {
         },
         previous =>
         sub {
+
+            return $_[0] if $_[0]->is_infinite;
+
             my $self = $_[0]->clone;
             # warn "bysetpos: previous of ".$_[0]->datetime;
             # print STDERR "    previous: ".$base_set->current( $_[0] )->datetime."\n";
@@ -639,6 +645,7 @@ sub recur {
     return $base_set;
 }
 
+__END__
 
 =head1 NAME
 
@@ -805,10 +812,6 @@ See RFC 2445, section 4.3.10 for more details.
 
 =back
 
-=head1 VERSION NOTES
-
-Option C<wkst> is not implemented.
-
 =head1 AUTHOR
 
 Flavio Soibelmann Glock
@@ -851,5 +854,5 @@ RFC2445 - Internet Calendaring and Scheduling Core Object
 Specification - http://www.ietf.org/rfc/rfc2445.txt
 
 =cut
-1;
+
 
