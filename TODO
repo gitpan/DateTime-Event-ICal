@@ -1,0 +1,36 @@
+TODO list for Perl module DateTime-Event-ICal
+
+* "byday -2 friday"
+  - use yearly;-1su to define 'wkst' !
+  - test overflow
+  - need some 'interval' and 'dtstart' tests
+
+* the implementation of 'select' in Set::Infinite is incomplete
+  and doesn't have the 'last' attribute. -- should be implemented!
+
+* finish importing Date::Set RFC2445 recurrence tests
+
+* wkst
+
+* bysetpos
+  - implement "previous" sub
+  - use some kind of memoization
+  - test overflow
+  - optimize DateTime::Set "current" sub
+
+* byweekno - test with 'daily'
+
+* no tests were made defining recurrences without dtstart.
+
+* the effect of 'count' on a recurrence without dtstart is not defined.
+  the effect of count == 0 is not defined.
+
+* no tests were made using datetimes with timezones.
+
+* mixing positive and negative arguments in the same list
+  might give wrong results is the numbers are big enough
+  to cause the datetimes to interleave.
+
+* some arguments are not checked for overflow,
+  such as byyearday.
+
