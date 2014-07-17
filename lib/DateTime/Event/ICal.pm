@@ -11,7 +11,7 @@ use DateTime::Event::Recurrence 0.11;
 use Params::Validate qw(:all);
 use vars qw( $VERSION @ISA );
 @ISA     = qw( Exporter );
-$VERSION = '0.11';
+$VERSION = '0.12';
 
 use constant INFINITY     =>       100 ** 100 ** 100 ;
 use constant NEG_INFINITY => -1 * (100 ** 100 ** 100);
@@ -598,7 +598,16 @@ sub recur {
     if ( exists $args{bymonthday} ||
          exists $args{bymonth} ) 
     {
-        $by_month_day = _yearly_recurrence($dtstart, \%args);
+        my %by = %args;
+        $by{byhour} = $args_backup{byhour} if $args_backup{byhour};
+        $by{byhour} = [ 0 .. 23 ] if $args{freq} eq 'hourly';
+        $by{byminute} = $args_backup{byminute} if $args_backup{byminute};
+        $by{byminute} = [ 0 .. 59 ] if $args{freq} eq 'minutely';
+        $by{bysecond} = $args_backup{bysecond} if $args_backup{bysecond};
+        $by{bysecond} = [ 0 .. 59 ] if $args{freq} eq 'secondly';
+        $by_month_day = _yearly_recurrence($dtstart, \%by);
+        delete $args{bymonthday};
+        delete $args{bymonth};
     }
 
     my $by_week_day;
@@ -606,7 +615,16 @@ sub recur {
     if ( exists $args{byday} ||
          exists $args{byweekno} ) 
     {
-        $by_week_day = _weekly_recurrence($dtstart, \%args);
+        my %by = %args;
+        $by{byhour} = $args_backup{byhour} if $args_backup{byhour};
+        $by{byhour} = [ 0 .. 23 ] if $args{freq} eq 'hourly';
+        $by{byminute} = $args_backup{byminute} if $args_backup{byminute};
+        $by{byminute} = [ 0 .. 59 ] if $args{freq} eq 'minutely';
+        $by{bysecond} = $args_backup{bysecond} if $args_backup{bysecond};
+        $by{bysecond} = [ 0 .. 59 ] if $args{freq} eq 'secondly';
+        $by_week_day = _weekly_recurrence($dtstart, \%by);
+        delete $args{byday};
+        delete $args{byweekno};
     }
 
     my $by_hour;
@@ -765,7 +783,7 @@ means a recurrence that occurs every three years.
 =item * wkst
 
 Week start day.  This can be one of: "mo", "tu", "we", "th", "fr",
-"sa", "su".  The default is monday ("mo").
+"sa", "su".  The default is Monday ("mo").
 
 B<Note: this parameter is not yet implemented>
 
@@ -805,7 +823,7 @@ but not zero.  The allowed ranges are -53 to -1, and 1 to 53.
 
 The first week of year is week 1.
 
-The default week start day is monday.
+The default week start day is Monday.
 
 Week -1 is the last week of year.
 
@@ -824,7 +842,7 @@ See RFC 2445, section 4.3.10 for more details.
 
 This can be either a scalar or an array reference of positive and
 negative numbers from -366 to -1, and 1 to 366.  This parameter is
-used in conjuction with one of the other "by..." parameters.
+used in conjunction with one of the other "by..." parameters.
 
 See RFC 2445, section 4.3.10 for more details.
 

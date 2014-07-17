@@ -1,23 +1,25 @@
---- #YAML:1.0
-name:               DateTime-Event-ICal
-version:            0.11
-abstract:           DateTime rfc2445 recurrences
+---
+abstract: 'DateTime rfc2445 recurrences'
 author:
-    - Flavio S. Glock <fglock@gmail.com>
-license:            unknown
-distribution_type:  module
-configure_requires:
-    ExtUtils::MakeMaker:  0
+  - 'Flavio S. Glock <fglock@gmail.com>'
 build_requires:
-    ExtUtils::MakeMaker:  0
-requires:
-    DateTime:             0
-    DateTime::Event::Recurrence:  0.11
-no_index:
-    directory:
-        - t
-        - inc
-generated_by:       ExtUtils::MakeMaker version 6.56
+  ExtUtils::MakeMaker: 0
+configure_requires:
+  ExtUtils::MakeMaker: 0
+dynamic_config: 1
+generated_by: 'ExtUtils::MakeMaker version 6.94, CPAN::Meta::Converter version 2.120351'
+license: unknown
 meta-spec:
-    url:      http://module-build.sourceforge.net/META-spec-v1.4.html
-    version:  1.4
+  url: http://module-build.sourceforge.net/META-spec-v1.4.html
+  version: 1.4
+name: DateTime-Event-ICal
+no_index:
+  directory:
+    - t
+    - inc
+requires:
+  DateTime: 0
+  DateTime::Event::Recurrence: 0.11
+resources:
+  repository: https://github.com/fglock/DateTime-Event-ICal.git
+version: 0.12
